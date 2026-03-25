@@ -1,0 +1,21 @@
+{
+  "name": "Hrs_assessment Dev Container",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "installOhMyZsh": true,
+      "installOhMyZshConfig": true,
+      "upgradePackages": true
+    }
+  },
+  "updateRemoteUserUID": true,
+  "extensions": [
+    "GitHub.copilot",
+    "GitHub.copilot-chat",
+    "ms-vscode.powershell",
+    "speckit.speckit"
+  ]
+}
