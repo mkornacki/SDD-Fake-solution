@@ -1,14 +1,26 @@
 {
-  "name": "Hrs_assessment Dev Container",
+  "name": "Java 11 + DinD",
   "build": {
     "dockerfile": "Dockerfile"
   },
+  "runArgs": [
+    "--privileged"
+  ],
   "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+        "version": "latest",
+        "moby": false
+    },
     "ghcr.io/devcontainers/features/common-utils:2": {
       "installZsh": true,
       "installOhMyZsh": true,
       "installOhMyZshConfig": true,
       "upgradePackages": true
+    },
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "11",
+      "installMaven": true,
+      "installGradle": true
     }
   },
   "updateRemoteUserUID": true,
@@ -17,5 +29,14 @@
     "GitHub.copilot-chat",
     "ms-vscode.powershell",
     "speckit.speckit"
-  ]
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "vscjava.vscode-java-pack",
+        "redhat.java",
+        "vscjava.vscode-maven"
+      ]
+    }
+  }
 }

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.8.xsd">
+
+    <include file="V001__initial_schema.sql" relativeToChangelogFile="true"/>
+    <include file="V002__reservation_schema.sql" relativeToChangelogFile="true"/>
+    <include file="V003__idempotency_integration_schema.sql" relativeToChangelogFile="true"/>
+    <include file="V004__audit_history_schema.sql" relativeToChangelogFile="true"/>
+    <include file="V005__idempotency_request_context.sql" relativeToChangelogFile="true"/>
+    <include file="V006__async_work_schema.sql" relativeToChangelogFile="true"/>
+    <include file="V007__audit_retention_schema.sql" relativeToChangelogFile="true"/>
+    <include file="V100__dev_bootstrap_baseline.sql" relativeToChangelogFile="true"/>
+    <include file="V101__sample_dataset_metadata.sql" relativeToChangelogFile="true"/>
+
+</databaseChangeLog>

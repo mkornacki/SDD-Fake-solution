@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    url: ${DATASOURCE_URL}
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI}
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8081}
+
+logging:
+  level:
+    root: WARN
+    com.acme.foundation: INFO

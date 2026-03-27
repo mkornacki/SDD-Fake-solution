@@ -1,0 +1,526 @@
+openapi: 3.0.3
+info:
+  title: Hotel Reservation Partner API Contract
+  version: 0.1.0
+  description: |
+    RESTful API for business partner hotel reservation management.
+    Supports multi-room creation, full and partial cancellations, reservation retrieval
+    with change history, and dead-letter replay operations.
+    Authentication: OAuth 2.0 / OIDC Bearer token required on all endpoints.
+    Error format: RFC 9457 Problem Details (application/problem+json).
+    Idempotency: X-Idempotency-Key header required on create and cancel operations.
+servers:
+  - url: /api/v1
+    description: API version 1
+
+paths:
+  /reservations:
+    post:
+      summary: Create a multi-room reservation
+      operationId: createReservation
+      description: |
+        Accepts a reservation with one or more room items. Operation is idempotent:
+        retrying with the same X-Idempotency-Key and equivalent payload returns
+        the same reservation outcome without creating duplicates.
+        Partner communication is processed asynchronously; the API returns 202 Accepted.
+      tags: [Reservations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReservationRequest'
+      responses:
+        '202':
+          description: Reservation accepted for processing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateReservationAccepted'
+        '200':
+          description: Idempotent replay — returns canonical previously-accepted outcome.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateReservationAccepted'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /reservations/{reservationId}:
+    get:
+      summary: Retrieve reservation state and history
+      operationId: getReservation
+      description: |
+        Returns the current reservation state including rooms, financial breakdown,
+        and full change history. PII fields are masked for callers without PII access scope.
+      tags: [Reservations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ReservationId'
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Reservation details returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      summary: Cancel entire reservation
+      operationId: cancelReservation
+      description: |
+        Cancels all active room items in the reservation. Operation is idempotent.
+        Downstream partner communication is asynchronous; returns 202 Accepted.
+      tags: [Reservations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ReservationId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancellationRequest'
+      responses:
+        '202':
+          description: Cancellation accepted for processing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationAccepted'
+        '200':
+          description: Idempotent replay — reservation already in terminal cancelled state.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationAccepted'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+  /reservations/{reservationId}/rooms/{roomItemId}:
+    delete:
+      summary: Cancel a single room item (partial cancellation)
+      operationId: cancelRoomItem
+      description: |
+        Cancels one room item within a multi-room reservation without affecting
+        other active rooms. Operation is idempotent. Returns 202 Accepted.
+      tags: [Reservations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ReservationId'
+        - $ref: '#/components/parameters/RoomItemId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CancellationRequest'
+      responses:
+        '202':
+          description: Room cancellation accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationAccepted'
+        '200':
+          description: Idempotent replay — room already cancelled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CancellationAccepted'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+
+  /operations/dlq/{dlqId}/replay:
+    post:
+      summary: Replay a dead-lettered operation
+      operationId: replayDeadLetterItem
+      description: |
+        Triggers replay of a terminally failed integration task from the dead-letter queue.
+        Requires privileged operator/admin scope. Replay preserves original idempotency semantics.
+        An operator reason is required and recorded in immutable audit history.
+      tags: [Operations]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/DlqId'
+        - $ref: '#/components/parameters/CorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplayRequest'
+      responses:
+        '202':
+          description: Replay accepted.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OAuth 2.0 / OIDC JWT bearer token. Required on all endpoints.
+
+  parameters:
+    ReservationId:
+      in: path
+      name: reservationId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RoomItemId:
+      in: path
+      name: roomItemId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DlqId:
+      in: path
+      name: dlqId
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      in: header
+      name: X-Idempotency-Key
+      required: true
+      schema:
+        type: string
+        maxLength: 128
+      description: Client-provided idempotency key ensuring at-most-once processing.
+    CorrelationId:
+      in: header
+      name: X-Correlation-Id
+      required: false
+      schema:
+        type: string
+        format: uuid
+      description: Client-provided correlation identifier for distributed tracing.
+
+  schemas:
+    CreateReservationRequest:
+      type: object
+      required: [partnerId, guest, rooms, currencyCode]
+      properties:
+        partnerId:
+          type: string
+          description: Partner identifier.
+        externalReference:
+          type: string
+          description: Optional partner-provided reference for the reservation.
+        currencyCode:
+          type: string
+          description: ISO 4217 currency code.
+          example: USD
+        guest:
+          $ref: '#/components/schemas/GuestInfo'
+        rooms:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/RoomRequest'
+
+    GuestInfo:
+      type: object
+      required: [givenName, familyName]
+      properties:
+        givenName:
+          type: string
+          description: Guest first name (PII — masked for callers without PII scope).
+        familyName:
+          type: string
+          description: Guest last name (PII — masked for callers without PII scope).
+        email:
+          type: string
+          format: email
+          description: Guest email address (PII — masked for callers without PII scope).
+        phone:
+          type: string
+          description: Guest phone number (PII — masked for callers without PII scope).
+
+    RoomRequest:
+      type: object
+      required: [roomCode, checkInDate, checkOutDate, basePrice]
+      properties:
+        roomCode:
+          type: string
+        checkInDate:
+          type: string
+          format: date
+        checkOutDate:
+          type: string
+          format: date
+        basePrice:
+          type: number
+          format: double
+          minimum: 0
+
+    CreateReservationAccepted:
+      type: object
+      required: [reservationId, status]
+      properties:
+        reservationId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [PENDING, ACTIVE]
+        partnerProcessingStatus:
+          type: string
+          enum: [QUEUED, IN_PROGRESS, COMPLETED, FAILED]
+
+    ReservationResponse:
+      type: object
+      required: [reservationId, partnerId, status, currencyCode, totalPrice, rooms]
+      properties:
+        reservationId:
+          type: string
+          format: uuid
+        partnerId:
+          type: string
+        externalReference:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, ACTIVE, PARTIALLY_CANCELLED, CANCELLED, FAILED]
+        currencyCode:
+          type: string
+        totalPrice:
+          type: number
+          format: double
+        totalRefundAmount:
+          type: number
+          format: double
+        totalCancellationFee:
+          type: number
+          format: double
+        guest:
+          $ref: '#/components/schemas/GuestInfo'
+        rooms:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoomItemResponse'
+        financialBreakdown:
+          $ref: '#/components/schemas/FinancialBreakdown'
+        history:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistoryEvent'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    RoomItemResponse:
+      type: object
+      properties:
+        roomItemId:
+          type: string
+          format: uuid
+        roomCode:
+          type: string
+        checkInDate:
+          type: string
+          format: date
+        checkOutDate:
+          type: string
+          format: date
+        status:
+          type: string
+          enum: [ACTIVE, CANCELLATION_PENDING, CANCELLED]
+        basePrice:
+          type: number
+          format: double
+        cancellationFee:
+          type: number
+          format: double
+        refundAmount:
+          type: number
+          format: double
+
+    FinancialBreakdown:
+      type: object
+      properties:
+        subtotal:
+          type: number
+          format: double
+        totalTax:
+          type: number
+          format: double
+        totalFees:
+          type: number
+          format: double
+        totalPenalties:
+          type: number
+          format: double
+        totalRefunds:
+          type: number
+          format: double
+        netTotal:
+          type: number
+          format: double
+
+    HistoryEvent:
+      type: object
+      properties:
+        eventId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+        actorId:
+          type: string
+        reason:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+
+    CancellationRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          description: Optional reason for cancellation.
+
+    CancellationAccepted:
+      type: object
+      required: [reservationId, status]
+      properties:
+        reservationId:
+          type: string
+          format: uuid
+        roomItemId:
+          type: string
+          format: uuid
+          description: Present only for partial (room-level) cancellations.
+        status:
+          type: string
+          enum: [CANCELLATION_PENDING, CANCELLED, PARTIALLY_CANCELLED]
+
+    ReplayRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          description: Operator-provided reason for replay. Recorded in immutable audit history.
+
+    ProblemDetail:
+      type: object
+      required: [type, title, status]
+      description: RFC 9457 Problem Details error response.
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        extensions:
+          type: object
+          additionalProperties: true
+
+  responses:
+    BadRequest:
+      description: Malformed request syntax.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Unauthorized:
+      description: Missing or invalid authentication token.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Forbidden:
+      description: Authenticated caller lacks required permission.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    NotFound:
+      description: Resource not found.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Conflict:
+      description: Conflicting operation or optimistic lock failure.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    ValidationError:
+      description: Input validation failed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+
+security:
+  - bearerAuth: []

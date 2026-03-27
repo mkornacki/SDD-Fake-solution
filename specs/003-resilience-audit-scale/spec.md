@@ -5,6 +5,15 @@
 **Status**: Draft  
 **Input**: User description: "Below is a list of user stories. Idempotency and Retry Safety; Partner Integration and Asynchronous Processing; Audit Security and Compliance; Scalability and Availability"
 
+## Clarifications
+
+### Session 2026-03-25
+
+- Q: Who can trigger dead-letter replay operations? -> A: Only privileged operator/admin role can trigger replay.
+- Q: What is the primary idempotency identity mechanism for create requests? -> A: Client-provided idempotency key is required, with server validation and storage.
+- Q: What retention period should idempotency records use? -> A: Use configurable 30-day window.
+- Q: What authorization and governance are required for dead-letter replay? -> A: Role-based check plus approval reason plus immutable audit event per replay.
+
 ## User Scenarios & Testing *(mandatory)*
 
 <!--
@@ -106,6 +115,8 @@ As a product owner or system operator, I want predictable performance and gracef
 ### Functional Requirements
 
 - **FR-001**: The system MUST identify repeated create requests for the same business context and return a consistent reservation outcome rather than creating duplicates.
+- **FR-001A**: The system MUST require a client-provided idempotency key on create requests and persist it with the canonical reservation outcome.
+- **FR-001B**: The system MUST validate idempotency key reuse to ensure the key maps to the same business intent and reject conflicting reuse attempts.
 - **FR-002**: The system MUST preserve idempotency behavior under concurrent identical create requests and prevent race-condition-driven duplicate state transitions.
 - **FR-003**: The system MUST return clear operation status on retried create requests, including at minimum an in-progress state and a completed state.
 - **FR-004**: The system MUST accept create requests without waiting for external partner completion and process partner communication asynchronously.
@@ -117,14 +128,17 @@ As a product owner or system operator, I want predictable performance and gracef
 - **FR-010**: The system MUST protect personally identifiable information in stored reservation-related records and in generated logs/exports.
 - **FR-011**: The system MUST enforce configured retention rules for raw payload and log records while preserving required auditability.
 - **FR-012**: The system MUST support auditable replay workflows for dead-lettered operations.
+- **FR-016**: The system MUST restrict dead-letter replay execution to privileged operator/admin roles only.
+- **FR-017**: The system MUST require an operator-provided replay reason for each dead-letter replay action and persist it in immutable audit history.
+- **FR-018**: The system MUST retain idempotency records for a configurable replay window with a default of 30 days.
 - **FR-013**: The system MUST enforce backpressure and request prioritization controls during high load to preserve critical reservation flows.
 - **FR-014**: The system MUST expose operational indicators including request rate, response latency, error rate, queue backlog, consumer delay, and idempotency reuse rate.
 - **FR-015**: The system MUST provide documented operational procedures for scaling responses and dead-letter replay execution.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Reservation Request Context**: Represents the business-unique create intent, including partner context, request fingerprint, correlation identifiers, and current operation status.
-- **Idempotency Record**: Represents prior processing outcome for a business context, including first-seen time, canonical result reference, and lifecycle state.
+- **Reservation Request Context**: Represents the business-unique create intent, including partner context, client idempotency key, request fingerprint, correlation identifiers, and current operation status.
+- **Idempotency Record**: Represents prior processing outcome for a business context, including first-seen time, canonical result reference, lifecycle state, and record-expiry timestamp based on the configured retention window.
 - **Asynchronous Work Item**: Represents queued partner-processing work with attempt counters, scheduling metadata, and execution state.
 - **Partner Interaction Log**: Represents partner request/response audit artifacts with masked sensitive fields, failure details, and trace linkage.
 - **Dead-Letter Item**: Represents operations that failed terminally, including failure reason, retry history, replay eligibility, and reconciliation status.
@@ -146,6 +160,7 @@ As a product owner or system operator, I want predictable performance and gracef
 - **SC-004**: 100% of terminally failed partner operations are available in dead-letter workflows with sufficient metadata to support replay and reconciliation.
 - **SC-005**: 100% of sampled reservation operations include required audit metadata and no unmasked sensitive fields in operational logs or exports.
 - **SC-006**: During load tests at agreed peak traffic, critical reservation creation remains available with overall successful request completion rate of at least 99.5%.
+- **SC-007**: 100% of dead-letter replay actions include operator reason metadata and immutable audit trace entries.
 
 ## Assumptions
 

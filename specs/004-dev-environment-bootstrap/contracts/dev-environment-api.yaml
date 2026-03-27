@@ -1,0 +1,144 @@
+openapi: 3.0.3
+info:
+  title: Developer Environment Verification API Contract
+  version: 0.1.0
+  description: |
+    Local development verification contract for the compose-managed backend environment.
+    All application endpoints remain authenticated according to the project constitution.
+    Operational health endpoints are exposed only for local development and container orchestration.
+servers:
+  - url: http://localhost:8080
+    description: Local development backend
+
+paths:
+  /actuator/health:
+    get:
+      summary: Retrieve aggregate application health
+      operationId: getHealth
+      tags: [Operations]
+      responses:
+        '200':
+          description: Application health returned.
+          content:
+            application/vnd.spring-boot.actuator.v3+json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /actuator/health/readiness:
+    get:
+      summary: Retrieve readiness state for local bootstrap verification
+      operationId: getReadiness
+      tags: [Operations]
+      responses:
+        '200':
+          description: Application is ready to serve local requests.
+          content:
+            application/vnd.spring-boot.actuator.v3+json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          description: Application is not yet ready.
+          content:
+            application/vnd.spring-boot.actuator.v3+json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /api/v1/dev/sample-data/status:
+    get:
+      summary: Verify seeded sample dataset availability
+      operationId: getSampleDataStatus
+      tags: [Development]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Seed dataset is available.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SampleDataStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OAuth 2.0 / OIDC JWT bearer token required for application endpoints.
+
+  schemas:
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [UP, DOWN, OUT_OF_SERVICE, UNKNOWN]
+        components:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/HealthComponent'
+
+    HealthComponent:
+      type: object
+      properties:
+        status:
+          type: string
+        details:
+          type: object
+          additionalProperties: true
+
+    SampleDataStatusResponse:
+      type: object
+      required: [datasetName, datasetVersion, seedStatus, recordCounts]
+      properties:
+        datasetName:
+          type: string
+        datasetVersion:
+          type: string
+        seedStatus:
+          type: string
+          enum: [NOT_STARTED, RUNNING, COMPLETED, FAILED]
+        recordCounts:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+            minimum: 0
+        seededAt:
+          type: string
+          format: date-time
+
+    ProblemDetail:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+
+  responses:
+    Unauthorized:
+      description: Authentication is required.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+    Forbidden:
+      description: Authenticated caller lacks required authority.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'

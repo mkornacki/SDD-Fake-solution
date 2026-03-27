@@ -1,5 +1,5 @@
 # Use the official Java base image with the longest LTS support (Java 21)
-FROM mcr.microsoft.com/devcontainers/java:21
+FROM mcr.microsoft.com/devcontainers/java:11  
 
 # Install Python, pip, and curl (required for uv and Specify CLI)
 RUN apt-get update && apt-get install -y python3 python3-pip curl && rm -rf /var/lib/apt/lists/*

@@ -1,3 +1,14 @@
+<!-- SYNC IMPACT REPORT
+Version change: 1.1.1 → 1.2.0
+Added sections: Section 5 – Strong Input Validation (injection and XSS prevention)
+Modified principles: none renamed
+Removed sections: none
+Templates requiring updates:
+  - .specify/templates/spec-template.md ✅ no change required
+  - .specify/templates/plan-template.md ✅ no change required
+  - .specify/templates/tasks-template.md ✅ no change required
+Deferred TODOs: none
+-->
 Project Constitution – Java 11 + Spring Boot
 Aligned with RFC 2119, Clean Architecture, Clean Code, OWASP ASVS Level 3, Kubernetes-ready, SonarQube-compliant
 1. General Principles
@@ -38,6 +49,13 @@ Determinism and Isolation
 Test Scenarios
 •	Test scenarios MUST cover all business functions, edge cases, and error paths.
 •	Scenarios MUST be unambiguous, repeatable, and aligned with domain and security requirements.
+
+Negative Path Coverage
+•	Every test scenario MUST include at least two negative test cases covering failure, rejection, or error paths.
+•	Negative test cases MUST cover distinct failure modes (e.g., invalid input, unauthorized access, resource not found, business rule violation) — two cases covering the same failure mode MUST NOT be counted as satisfying this requirement.
+•	Tests MUST explicitly assert the expected error response, status code, or exception type for each negative path.
+•	A build MUST NOT be merged if any tested scenario is missing the required minimum of two negative test cases.
+
 Unit and Integration Tests
 •	Domain logic MUST have 100% unit test coverage.
 •	Every public method MUST have a unit test.
@@ -60,7 +78,7 @@ Quality & Security Scanning (SonarQube)
 •	Code in every language (Java, YAML, JSON, Dockerfile, Bash, JS/TS, etc.) MUST comply with SonarQube’s default rules for that language.
 •	Violations of severity Blocker, Critical, or Major MUST NOT be accepted.
 4. Code Standards
-•	Code style MUST follow the selected standard (Checkstyle / Spotless / Google Java Style / Sonar ruleset).
+•	Code style MUST follow SonarQube's default ruleset for each applicable language. No alternative style standard MAY be used unless a formal exception is recorded in an ADR.
 •	Methods longer than 40 lines MUST NOT be accepted.
 •	Every commit MUST follow Conventional Commits.
 •	Code MUST be self-documenting.
@@ -74,6 +92,13 @@ o	are documented.
 •	Any SonarQube rule suppression MUST be documented in an ADR.
 5. Security
 •	Input validation MUST occur at system boundaries.
+•	All user-supplied and external data MUST undergo strong validation before processing. Strong validation means:
+	o	allow-list validation MUST be applied wherever the set of valid values is known,
+	o	input MUST be validated for type, length, format, and range,
+	o	all data destined for HTML output MUST be context-aware output-encoded to prevent Cross-Site Scripting (XSS),
+	o	all data used in database queries MUST use parameterized statements or prepared queries — string concatenation in queries MUST NOT be used,
+	o	all data used in OS commands, LDAP queries, XML parsers, and expression evaluators MUST be sanitized or parameterized to prevent injection attacks.
+•	Validation MUST be enforced server-side regardless of any client-side validation present.
 •	Sensitive data MUST NOT be logged.
 •	Error handling MUST be explicit and controlled.
 •	APIs MUST be resistant to OWASP Top 10 vulnerabilities.
@@ -129,5 +154,4 @@ o	an architectural impact assessment.
 •	Every change MUST be justified and explicitly approved.
 
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+**Version**: 1.2.0 | **Ratified**: 2026-03-26 | **Last Amended**: 2026-03-26

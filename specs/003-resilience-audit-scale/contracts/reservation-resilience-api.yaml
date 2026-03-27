@@ -1,0 +1,172 @@
+openapi: 3.0.3
+info:
+  title: Reservation Resilience API Contract
+  version: 0.1.0
+  description: API contract for idempotent reservation create, status lookup, and dead-letter replay control.
+paths:
+  /api/v1/reservations:
+    post:
+      summary: Create reservation idempotently
+      operationId: createReservation
+      parameters:
+        - in: header
+          name: X-Idempotency-Key
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Correlation-Id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReservationRequest'
+      responses:
+        '202':
+          description: Request accepted for asynchronous processing.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateReservationAccepted'
+        '200':
+          description: Idempotent replay returning canonical completed result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateReservationCompleted'
+        '409':
+          description: Conflicting request payload for same idempotency/business context.
+        '422':
+          description: Validation failure.
+  /api/v1/reservations/{contextId}/status:
+    get:
+      summary: Get reservation processing status
+      operationId: getReservationStatus
+      parameters:
+        - in: path
+          name: contextId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Current operation status.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationStatusResponse'
+        '404':
+          description: Context not found.
+  /api/v1/operations/dlq/{dlqId}/replay:
+    post:
+      summary: Trigger replay of dead-lettered operation
+      operationId: replayDeadLetterOperation
+      parameters:
+        - in: path
+          name: dlqId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplayRequest'
+      responses:
+        '202':
+          description: Replay accepted.
+        '403':
+          description: Unauthorized actor.
+        '404':
+          description: DLQ item not found.
+components:
+  schemas:
+    CreateReservationRequest:
+      type: object
+      required: [partnerId, externalRequestRef, guest, stay]
+      properties:
+        partnerId:
+          type: string
+        externalRequestRef:
+          type: string
+        guest:
+          type: object
+          properties:
+            givenName:
+              type: string
+            familyName:
+              type: string
+            email:
+              type: string
+              format: email
+        stay:
+          type: object
+          properties:
+            hotelCode:
+              type: string
+            checkIn:
+              type: string
+              format: date
+            checkOut:
+              type: string
+              format: date
+    CreateReservationAccepted:
+      type: object
+      required: [contextId, status, traceId]
+      properties:
+        contextId:
+          type: string
+        status:
+          type: string
+          enum: [IN_PROGRESS]
+        traceId:
+          type: string
+    CreateReservationCompleted:
+      type: object
+      required: [contextId, status, reservationId, traceId]
+      properties:
+        contextId:
+          type: string
+        status:
+          type: string
+          enum: [COMPLETED]
+        reservationId:
+          type: string
+        traceId:
+          type: string
+    ReservationStatusResponse:
+      type: object
+      required: [contextId, status, updatedAt, traceId]
+      properties:
+        contextId:
+          type: string
+        status:
+          type: string
+          enum: [IN_PROGRESS, COMPLETED, FAILED, DLQ]
+        reservationId:
+          type: string
+          nullable: true
+        failureCode:
+          type: string
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+        traceId:
+          type: string
+    ReplayRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+        requestedBy:
+          type: string
+        dryRun:
+          type: boolean
+          default: false

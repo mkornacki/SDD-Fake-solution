@@ -1,0 +1,45 @@
+services:
+  sqlite-storage:
+    image: alpine:3.20
+    command:
+      - /bin/sh
+      - -c
+      - mkdir -p /workspace-data && touch /workspace-data/.bootstrap-ready && tail -f /dev/null
+    volumes:
+      - ../../backend/data:/workspace-data
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /workspace-data/.bootstrap-ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 1s
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    image: acme-foundation-local:latest
+    depends_on:
+      sqlite-storage:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      SERVER_PORT: "8080"
+      MANAGEMENT_PORT: "8081"
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+      DATASOURCE_URL: ${DATASOURCE_URL:-jdbc:sqlite:/app/data/foundation-local.db}
+      OAUTH2_ISSUER_URI: ${OAUTH2_ISSUER_URI:-http://localhost:8180/realms/acme}
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+      - "${MANAGEMENT_PORT:-8081}:8081"
+    volumes:
+      - ../../backend/data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://localhost:8081/actuator/health/readiness | grep '\"status\":\"UP\"' >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped

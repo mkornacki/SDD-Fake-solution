@@ -1,0 +1,73 @@
+spring:
+  datasource:
+    url: ${DATASOURCE_URL:jdbc:sqlite:/app/data/foundation-local.db}
+    driver-class-name: org.sqlite.JDBC
+  jpa:
+    database-platform: org.sqlite.hibernate.dialect.SQLiteDialect
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+  liquibase:
+    change-log: classpath:db/migration/changelog-master.xml
+    enabled: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8180/realms/acme}
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASS:guest}
+    virtual-host: /
+
+reservation:
+  partner:
+    stub-endpoint: ${PARTNER_STUB_URL:http://localhost:9090/partner-stub}
+    connect-timeout-ms: 3000
+    read-timeout-ms: 5000
+  async-worker:
+    queue-name: reservation.integration.tasks
+    dlq-name: reservation.integration.tasks.dlq
+    concurrency: 3
+    max-concurrency: 10
+    thread-pool-size: 10
+  retry:
+    max-attempts: 5
+    base-delay-ms: 1000
+    max-delay-ms: 60000
+    multiplier: 2.0
+    jitter: true
+  idempotency:
+    expiry-days: 30
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8081}
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+      show-components: always
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+
+sample-data:
+  dataset-name: foundation-sample-dataset
+  dataset-version: 1.0.0
+
+logging:
+  level:
+    com.acme.foundation: DEBUG
+    com.acme.reservation: DEBUG
+    org.springframework.security: DEBUG

@@ -1,0 +1,223 @@
+openapi: 3.0.3
+info:
+  title: Backend Foundation API Contract
+  version: 0.1.0
+  description: |
+    Foundational REST API contract defining health probes, authentication boundaries,
+    error model, and sample endpoint patterns. All downstream features extend this contract.
+    Authentication: OAuth 2.0 / OIDC Bearer token required on all business endpoints.
+    Error format: RFC 9457 Problem Details (application/problem+json).
+servers:
+  - url: /api/v1
+    description: API version 1
+
+paths:
+  /actuator/health/liveness:
+    get:
+      summary: Liveness probe
+      operationId: getLiveness
+      description: Returns service liveness status for Kubernetes orchestration. No authentication required.
+      tags: [Health]
+      security: []
+      responses:
+        '200':
+          description: Service is alive.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+        '503':
+          description: Service is not alive.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /actuator/health/readiness:
+    get:
+      summary: Readiness probe
+      operationId: getReadiness
+      description: Returns service readiness status for Kubernetes traffic routing. No authentication required.
+      tags: [Health]
+      security: []
+      responses:
+        '200':
+          description: Service is ready to receive traffic.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+        '503':
+          description: Service is not ready.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthStatus'
+
+  /health:
+    get:
+      summary: Application health summary
+      operationId: getHealth
+      description: Authenticated health summary endpoint returning composite status. Requires authentication.
+      tags: [Health]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/CorrelationId'
+      responses:
+        '200':
+          description: Health summary returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: OAuth 2.0 / OIDC JWT bearer token. Required on all business endpoints.
+
+  parameters:
+    CorrelationId:
+      in: header
+      name: X-Correlation-Id
+      required: false
+      schema:
+        type: string
+        format: uuid
+      description: Optional client-provided correlation identifier for distributed tracing.
+
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [UP, DOWN, OUT_OF_SERVICE]
+        components:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/ComponentHealth'
+
+    ComponentHealth:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [UP, DOWN]
+        details:
+          type: object
+          additionalProperties:
+            type: string
+
+    ApiResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          description: Primary response payload.
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+
+    ResponseMeta:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        apiVersion:
+          type: string
+          example: v1
+
+    ProblemDetail:
+      type: object
+      required: [type, title, status]
+      description: RFC 9457 Problem Details error response.
+      properties:
+        type:
+          type: string
+          format: uri
+          description: URI identifying the problem type.
+          example: https://api.acme.com/problems/validation-error
+        title:
+          type: string
+          description: Short, human-readable summary.
+          example: Validation Error
+        status:
+          type: integer
+          description: HTTP status code.
+          example: 422
+        detail:
+          type: string
+          description: Human-readable explanation specific to this instance.
+          example: Field 'name' must not be blank.
+        instance:
+          type: string
+          format: uri
+          description: URI of the specific request instance.
+        extensions:
+          type: object
+          additionalProperties: true
+          description: Additional problem-specific properties.
+
+  responses:
+    Unauthorized:
+      description: Missing or invalid authentication token.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          example:
+            type: https://api.acme.com/problems/unauthorized
+            title: Unauthorized
+            status: 401
+            detail: Bearer token is missing or invalid.
+
+    Forbidden:
+      description: Authenticated caller lacks required permission.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          example:
+            type: https://api.acme.com/problems/forbidden
+            title: Forbidden
+            status: 403
+            detail: Caller does not have permission to perform this operation.
+
+    ValidationError:
+      description: Input validation failed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          example:
+            type: https://api.acme.com/problems/validation-error
+            title: Validation Error
+            status: 422
+            detail: One or more fields failed validation.
+
+    InternalError:
+      description: Unexpected server error. No internal details exposed.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          example:
+            type: https://api.acme.com/problems/internal-error
+            title: Internal Server Error
+            status: 500
+            detail: An unexpected error occurred. Please contact support if the issue persists.
+
+security:
+  - bearerAuth: []
