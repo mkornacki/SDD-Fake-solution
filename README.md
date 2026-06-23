@@ -1,5 +1,4 @@
 # Hotel Reservation System — Assessment
-
 A production-grade Hotel Reservation API built with Java 11 and Spring Boot, following **Spec-Driven Development** principles using **SpecKit**. The project demonstrates a hexagonal architecture with full OAuth2 security, resilience patterns, contract testing, and a fully automated local developer environment via **Dev Containers**.
 
 ---
